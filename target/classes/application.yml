@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: cerberus-auth
+
+  datasource:
+    # localhost because we're running the JAR on our own machine for now,
+    # while Postgres runs inside Docker with its port published to the host.
+    # (This changes to "postgres" once the app itself is dockerized on Day 7.)
+    url: jdbc:postgresql://localhost:5432/cerberus
+    username: cerberus
+    password: cerberus_dev_password
+
+  jpa:
+    hibernate:
+      # 'update' auto-adjusts tables to match your entities -- convenient now,
+      # but in a real production system you'd switch to migration tools
+      # like Flyway/Liquibase so schema changes are tracked and reversible.
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+  mail:
+    host: localhost
+    port: 1025          # Mailhog's SMTP port
+    properties:
+      mail:
+        smtp:
+          auth: false
+          starttls:
+            enable: false
+
+server:
+  port: 8080
+
+jwt:
+  # HS256 needs a key of at least 256 bits (32 chars). This is a dev-only
+  # placeholder -- in a real deployment this comes from an environment
+  # variable or secrets manager, NEVER committed to source control.
+  secret: dev-only-secret-key-change-this-before-any-real-deployment-12345
+  access-token-expiration-ms: 900000   # 15 minutes. Deliberately short --
+                                          # access tokens are meant to be
+                                          # short-lived; Day 3's refresh
+                                          # token is what lets a user stay
+                                          # logged in without re-entering
+                                          # their password every 15 minutes.
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    org.springframework.security: DEBUG   # verbose now, on purpose -- you WANT
+                                            # to see what the filter chain is doing
+                                            # while you're learning it in Day 2

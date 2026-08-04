@@ -1,0 +1,45 @@
+version: "3.9"
+
+services:
+  # ---- Postgres: source of truth for users, roles, permissions, audit logs ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: cerberus-postgres
+    environment:
+      POSTGRES_DB: cerberus
+      POSTGRES_USER: cerberus
+      POSTGRES_PASSWORD: cerberus_dev_password
+    ports:
+      - "5432:5432"          # host:container -- lets you connect from your own DB client too
+    volumes:
+      - pg_data:/var/lib/postgresql/data   # named volume = data survives container restarts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cerberus"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---- Redis: refresh tokens, rate-limit counters, revoked-token blacklist ----
+  redis:
+    image: redis:7-alpine
+    container_name: cerberus-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ---- Mailhog: a fake SMTP server so you can test verification emails
+  #      without spamming a real inbox. Open http://localhost:8025 to see
+  #      every email your app "sends" land in a browser-based inbox. ----
+  mailhog:
+    image: mailhog/mailhog:latest
+    container_name: cerberus-mailhog
+    ports:
+      - "1025:1025"   # SMTP port -- your app sends mail here
+      - "8025:8025"   # web UI -- you view the mail here
+
+volumes:
+  pg_data:
