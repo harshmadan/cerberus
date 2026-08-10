@@ -7,7 +7,9 @@ import com.cerberus.auth.entity.Role;
 import com.cerberus.auth.entity.User;
 import com.cerberus.auth.repository.RoleRepository;
 import com.cerberus.auth.repository.UserRepository;
+import com.cerberus.auth.security.CustomUserDetailsService;
 import com.cerberus.auth.security.JwtService;
+import com.cerberus.auth.security.RefreshTokenService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -26,7 +28,8 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
-    private final com.cerberus.auth.security.CustomUserDetailsService userDetailsService;
+    private final CustomUserDetailsService userDetailsService;
+    private final RefreshTokenService refreshTokenService;
 
     public void register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -56,11 +59,6 @@ public class AuthService {
     }
 
     public AuthResponse login(LoginRequest request) {
-        // Delegates the actual "does this password match?" check to the
-        // AuthenticationManager -> AuthenticationProvider -> PasswordEncoder
-        // chain we wired up in SecurityConfig. If it fails, this throws
-        // BadCredentialsException automatically -- we don't check passwords
-        // ourselves anywhere in this class.
         authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
         );
@@ -68,8 +66,30 @@ public class AuthService {
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getEmail());
         String accessToken = jwtService.generateAccessToken(userDetails);
 
+        var issued = refreshTokenService.issue(userDetails.getUsername());
+
         return AuthResponse.builder()
                 .accessToken(accessToken)
+                .refreshToken(issued.refreshToken())
                 .build();
+    }
+
+    public AuthResponse refresh(String refreshToken) {
+        // rotate() does all the real work: validates, detects reuse, and
+        // issues the new token. If it throws, our GlobalExceptionHandler
+        // turns that into a 401 -- we don't need to handle it here.
+        var result = refreshTokenService.rotate(refreshToken);
+
+        UserDetails userDetails = userDetailsService.loadUserByUsername(result.subjectEmail());
+        String newAccessToken = jwtService.generateAccessToken(userDetails);
+
+        return AuthResponse.builder()
+                .accessToken(newAccessToken)
+                .refreshToken(result.refreshToken())
+                .build();
+    }
+
+    public void logout(String refreshToken) {
+        refreshTokenService.revoke(refreshToken);
     }
 }
