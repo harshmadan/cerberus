@@ -11,6 +11,5 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class AuthResponse {
     private String accessToken;
-    // refreshToken field intentionally left out for now -- that's Day 3.
-    // Today, login only returns an access token.
+    private String refreshToken;
 }

@@ -22,6 +22,12 @@ public class GlobalExceptionHandler {
                 .body(Map.of("error", ex.getMessage()));
     }
 
+    @ExceptionHandler(com.cerberus.auth.security.TokenReuseException.class)
+    public ResponseEntity<Map<String, String>> handleTokenReuse(com.cerberus.auth.security.TokenReuseException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(Map.of("error", ex.getMessage()));
+    }
+
     @ExceptionHandler(BadCredentialsException.class)
     public ResponseEntity<Map<String, String>> handleBadCredentials(BadCredentialsException ex) {
         // Deliberately vague message -- "Invalid email or password" rather

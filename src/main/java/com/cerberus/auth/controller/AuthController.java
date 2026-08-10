@@ -2,6 +2,7 @@ package com.cerberus.auth.controller;
 
 import com.cerberus.auth.dto.AuthResponse;
 import com.cerberus.auth.dto.LoginRequest;
+import com.cerberus.auth.dto.RefreshRequest;
 import com.cerberus.auth.dto.RegisterRequest;
 import com.cerberus.auth.service.AuthService;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -28,5 +29,16 @@ public class AuthController {
     @PostMapping("/login")
     public ResponseEntity<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
+    }
+
+    @PostMapping("/refresh")
+    public ResponseEntity<AuthResponse> refresh(@Valid @RequestBody RefreshRequest request) {
+        return ResponseEntity.ok(authService.refresh(request.getRefreshToken()));
+    }
+
+    @PostMapping("/logout")
+    public ResponseEntity<Void> logout(@Valid @RequestBody RefreshRequest request) {
+        authService.logout(request.getRefreshToken());
+        return ResponseEntity.noContent().build();
     }
 }
