@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.authentication.configuration.AuthenticationConfiguration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -18,6 +19,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 
 @Configuration
 @EnableWebSecurity
+// This is the switch that makes @PreAuthorize/@PostAuthorize annotations
+// on controller/service methods actually get enforced. Without it, they'd
+// silently do nothing -- Spring wouldn't even error, it just wouldn't check.
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -57,7 +62,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 .csrf(csrf -> csrf.disable())  // safe here -- see explanation above;
-                                                 // this is stateless, cookie-free auth
+                // this is stateless, cookie-free auth
                 .authorizeHttpRequests(auth -> auth
                         // Anyone can hit register/login -- that's the whole point,
                         // you're not authenticated *yet* when calling these.
@@ -69,6 +74,25 @@ public class SecurityConfig {
                 )
                 .sessionManagement(session -> session
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                )
+                .exceptionHandling(ex -> ex
+                        // Fires when there's no valid authentication at all --
+                        // e.g. no token, or an expired/malformed one.
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            response.setContentType("application/json");
+                            response.setStatus(401);
+                            response.getWriter().write("{\"error\":\"Authentication required\"}");
+                        })
+                        // Fires when the request IS authenticated, but failed
+                        // a @PreAuthorize check -- this is the one RBAC
+                        // actually introduces today. Distinct from 401:
+                        // the server knows exactly who you are, you're just
+                        // not allowed to do this specific thing.
+                        .accessDeniedHandler((request, response, accessDeniedException) -> {
+                            response.setContentType("application/json");
+                            response.setStatus(403);
+                            response.getWriter().write("{\"error\":\"You do not have permission to perform this action\"}");
+                        })
                 )
                 .authenticationProvider(authenticationProvider())
                 // Insert our filter to run BEFORE Spring's default
