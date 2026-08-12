@@ -6,10 +6,13 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 
 - **JWT Authentication**: Secure stateless authentication with access tokens (15 min expiration) and refresh tokens
 - **User Management**: Registration, login, logout with token revocation
-- **Role-Based Access Control (RBAC)**: Users, roles, and permissions hierarchy
+- **Role-Based Access Control (RBAC)**: Users, roles, and permissions hierarchy with fine-grained access control
+- **Permission System**: Granular permissions using "resource:action" convention (e.g., `user:read`, `role:manage`)
+- **Admin Management API**: Dedicated endpoints for user, role, and permission management
 - **Refresh Token System**: Redis-based token storage with reuse detection
 - **Audit Logging**: Track authentication events and security-relevant actions
 - **Password Security**: BCrypt hashing with automatic salt generation
+- **Method-Level Security**: `@PreAuthorize` annotations for both role-based (`hasRole`) and permission-based (`hasAuthority`) checks
 - **API Documentation**: Interactive Swagger/OpenAPI UI at `/swagger-ui.html`
 - **Email Testing**: Mailhog integration for email verification testing
 
@@ -83,6 +86,33 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 
 Protected endpoints requiring JWT authentication (see security configuration).
 
+- **GET** `/api/users/me` - Get current user information
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Response: `{ "email": "string", "authorities": [...] }`
+
+### Admin Management (`/api/admin`)
+
+Protected endpoints requiring admin role and specific permissions.
+
+- **GET** `/api/admin/users` - List all users (requires `ROLE_ADMIN`)
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Response: Array of user summaries with ID, email, enabled status, and roles
+
+- **POST** `/api/admin/users/{userId}/roles` - Assign role to user (requires `role:manage` permission)
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Body: `{ "roleName": "ROLE_ADMIN" }`
+  - Response: 204 No Content
+
+- **POST** `/api/admin/permissions` - Create new permission (requires `ROLE_ADMIN`)
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Body: `{ "name": "resource:action" }`
+  - Response: 201 Created
+
+- **POST** `/api/admin/roles/{roleId}/permissions` - Assign permission to role (requires `role:manage` permission)
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Body: `{ "permissionName": "user:delete" }`
+  - Response: 204 No Content
+
 ## Database Schema
 
 The application automatically creates the following tables on startup:
@@ -92,6 +122,14 @@ The application automatically creates the following tables on startup:
 - **permissions** - Granular permissions
 - **refresh_tokens** - Token storage in Redis
 - **audit_logs** - Security event tracking
+
+### Default Data Seeding
+
+On startup, the application automatically seeds:
+
+- **Roles**: `ROLE_USER`, `ROLE_ADMIN`
+- **Permissions**: `user:read`, `user:write`, `user:delete`, `role:manage` (assigned to ROLE_ADMIN)
+- **Admin Account**: `admin@cerberus.dev` with password `AdminPass123!` (dev-only convenience)
 
 ### Direct Database Access
 
@@ -118,9 +156,13 @@ Key configuration settings:
 
 - Public endpoints: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`
 - All other endpoints require JWT authentication
+- Method-level security with `@PreAuthorize` annotations for fine-grained access control
+- Role-based checks: `@PreAuthorize("hasRole('ADMIN')")`
+- Permission-based checks: `@PreAuthorize("hasAuthority('user:delete')")`
 - Stateless session management
 - BCrypt password encoding
 - CSRF disabled (stateless JWT architecture)
+- Custom error responses: 401 for authentication failures, 403 for authorization failures
 
 ## Development
 
