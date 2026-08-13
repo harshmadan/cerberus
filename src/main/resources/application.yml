@@ -36,6 +36,30 @@ spring:
           starttls:
             enable: false
 
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            # ${VAR:default} syntax -- reads from an environment variable
+            # if set, otherwise falls back to the placeholder. Real values
+            # come from Google Cloud Console > APIs & Services > Credentials
+            # (create an OAuth 2.0 Client ID, type "Web application", and
+            # add http://localhost:8080/login/oauth2/code/google as an
+            # authorized redirect URI). Without real credentials, this
+            # specific feature won't work end-to-end -- but everything
+            # else in the app (including the rest of today's work) will.
+            client-id: ${GOOGLE_CLIENT_ID:placeholder-client-id}
+            client-secret: ${GOOGLE_CLIENT_SECRET:placeholder-client-secret}
+            scope:
+              - email
+              - profile
+
+app:
+  # Used to build links inside emails (verification, and displayed in the
+  # password reset email). Would point at a real domain in production.
+  base-url: http://localhost:8080
+
 server:
   port: 8080
 
@@ -45,11 +69,11 @@ jwt:
   # variable or secrets manager, NEVER committed to source control.
   secret: dev-only-secret-key-change-this-before-any-real-deployment-12345
   access-token-expiration-ms: 900000   # 15 minutes. Deliberately short --
-                                          # access tokens are meant to be
-                                          # short-lived; Day 3's refresh
-                                          # token is what lets a user stay
-                                          # logged in without re-entering
-                                          # their password every 15 minutes.
+    # access tokens are meant to be
+    # short-lived; Day 3's refresh
+    # token is what lets a user stay
+    # logged in without re-entering
+  # their password every 15 minutes.
 
 springdoc:
   swagger-ui:
@@ -58,5 +82,5 @@ springdoc:
 logging:
   level:
     org.springframework.security: DEBUG   # verbose now, on purpose -- you WANT
-                                            # to see what the filter chain is doing
-                                            # while you're learning it in Day 2
+      # to see what the filter chain is doing
+    # while you're learning it in Day 2

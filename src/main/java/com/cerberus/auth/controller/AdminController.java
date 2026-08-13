@@ -1,9 +1,6 @@
 package com.cerberus.auth.controller;
 
-import com.cerberus.auth.dto.AssignPermissionRequest;
-import com.cerberus.auth.dto.AssignRoleRequest;
-import com.cerberus.auth.dto.CreatePermissionRequest;
-import com.cerberus.auth.dto.UserSummaryResponse;
+import com.cerberus.auth.dto.*;
 import com.cerberus.auth.service.AdminService;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -63,5 +60,15 @@ public class AdminController {
     ) {
         adminService.assignPermissionToRole(roleId, request.getPermissionName());
         return ResponseEntity.noContent().build();
+    }
+
+    @PostMapping("/users/{userId}/deleteRole")
+    @PreAuthorize("hasAuthority('role:manage')")
+    public ResponseEntity<?> deleteRole(@PathVariable UUID userId, @Valid @RequestBody AssignRoleRequest request) {
+        boolean roleDeleted = adminService.deleteRole(userId, request.getRoleName());
+        if (roleDeleted)
+            return ResponseEntity.ok(ApiResponse.success("Role deleted successfully"));
+        else
+            return ResponseEntity.badRequest().body(ApiResponse.error("Failed to delete role", 400));
     }
 }

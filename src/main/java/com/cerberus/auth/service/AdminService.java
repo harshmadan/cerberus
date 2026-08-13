@@ -1,12 +1,8 @@
 package com.cerberus.auth.service;
 
 import com.cerberus.auth.dto.UserSummaryResponse;
-import com.cerberus.auth.entity.Permission;
-import com.cerberus.auth.entity.Role;
-import com.cerberus.auth.entity.User;
-import com.cerberus.auth.repository.PermissionRepository;
-import com.cerberus.auth.repository.RoleRepository;
-import com.cerberus.auth.repository.UserRepository;
+import com.cerberus.auth.entity.*;
+import com.cerberus.auth.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
@@ -65,5 +61,16 @@ public class AdminService {
         roleRepository.save(role);
         // Same effect as above, one level up: everyone holding this role
         // gains the permission on their next request, no re-login needed.
+    }
+
+    public boolean deleteRole(UUID userId, String roleName) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new IllegalStateException("User not found: " + userId));
+        Role role = roleRepository.findByName(roleName).orElseThrow(() -> new IllegalStateException("Role not found: " + roleName));
+
+        if(!user.getRoles().contains(role))
+            return false;
+        boolean userDeleted = user.getRoles().remove(role);
+        userRepository.save(user);
+        return userDeleted;
     }
 }
