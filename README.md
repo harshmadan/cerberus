@@ -5,7 +5,10 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 ## Features
 
 - **JWT Authentication**: Secure stateless authentication with access tokens (15 min expiration) and refresh tokens
-- **User Management**: Registration, login, logout with token revocation
+- **User Management**: Registration with email verification, login, logout with token revocation
+- **Email Verification**: Users must verify their email address before logging in
+- **Password Reset**: Secure forgot password flow with token-based reset
+- **OAuth2 Integration**: Google OAuth2 login support
 - **Role-Based Access Control (RBAC)**: Users, roles, and permissions hierarchy with fine-grained access control
 - **Permission System**: Granular permissions using "resource:action" convention (e.g., `user:read`, `role:manage`)
 - **Admin Management API**: Dedicated endpoints for user, role, and permission management
@@ -14,7 +17,8 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 - **Password Security**: BCrypt hashing with automatic salt generation
 - **Method-Level Security**: `@PreAuthorize` annotations for both role-based (`hasRole`) and permission-based (`hasAuthority`) checks
 - **API Documentation**: Interactive Swagger/OpenAPI UI at `/swagger-ui.html`
-- **Email Testing**: Mailhog integration for email verification testing
+- **Email Testing**: Mailhog integration for email verification and password reset testing
+- **Structured API Responses**: Consistent response format with status, message, and timestamp
 
 ## Tech Stack
 
@@ -67,12 +71,13 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 ### Authentication (`/api/auth`)
 
 - **POST** `/api/auth/register` - Register a new user
-  - Body: `{ "username": "string", "email": "string", "password": "string" }`
-  - Response: 201 Created
+  - Body: `{ "email": "string", "password": "string" }`
+  - Response: 201 Created (sends verification email)
 
 - **POST** `/api/auth/login` - Login with credentials
-  - Body: `{ "username": "string", "password": "string" }`
+  - Body: `{ "email": "string", "password": "string" }`
   - Response: `{ "accessToken": "string", "refreshToken": "string" }`
+  - Note: User must have verified their email before logging in
 
 - **POST** `/api/auth/refresh` - Refresh access token
   - Body: `{ "refreshToken": "string" }`
@@ -81,6 +86,23 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 - **POST** `/api/auth/logout` - Logout and revoke refresh token
   - Body: `{ "refreshToken": "string" }`
   - Response: 204 No Content
+
+- **GET** `/api/auth/verify-email` - Verify email address
+  - Query: `token=string` (from verification email)
+  - Response: 200 OK with success message
+
+- **POST** `/api/auth/forgot-password` - Request password reset
+  - Body: `{ "email": "string" }`
+  - Response: 200 OK (always succeeds to prevent email enumeration)
+
+- **POST** `/api/auth/reset-password` - Reset password with token
+  - Body: `{ "token": "string", "newPassword": "string" }`
+  - Response: 204 No Content
+
+- **OAuth2 Login** - Google OAuth2 authentication
+  - Start: `/oauth2/authorization/google` (redirects to Google)
+  - Callback: `/login/oauth2/code/google` (Google redirects back)
+  - Response: `{ "accessToken": "string", "refreshToken": "string" }`
 
 ### User Management (`/api/users`)
 
@@ -113,6 +135,11 @@ Protected endpoints requiring admin role and specific permissions.
   - Body: `{ "permissionName": "user:delete" }`
   - Response: 204 No Content
 
+- **POST** `/api/admin/users/{userId}/deleteRole` - Remove role from user (requires `role:manage` permission)
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Body: `{ "roleName": "ROLE_ADMIN" }`
+  - Response: `{ "status": 200, "message": "Role deleted successfully", "timestamp": "datetime" }`
+
 ## Database Schema
 
 The application automatically creates the following tables on startup:
@@ -130,6 +157,8 @@ On startup, the application automatically seeds:
 - **Roles**: `ROLE_USER`, `ROLE_ADMIN`
 - **Permissions**: `user:read`, `user:write`, `user:delete`, `role:manage` (assigned to ROLE_ADMIN)
 - **Admin Account**: `admin@cerberus.dev` with password `AdminPass123!` (dev-only convenience)
+  - Note: The admin account is created as enabled by default for convenience in development
+  - Regular users must verify their email before logging in
 
 ### Direct Database Access
 
@@ -154,8 +183,9 @@ Key configuration settings:
 
 ### Security Configuration
 
-- Public endpoints: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`
+- Public endpoints: `/api/auth/**`, `/swagger-ui/**`, `/v3/api-docs/**`, `/oauth2/**`, `/login/**`
 - All other endpoints require JWT authentication
+- Email verification required for new user registrations (except seeded admin)
 - Method-level security with `@PreAuthorize` annotations for fine-grained access control
 - Role-based checks: `@PreAuthorize("hasRole('ADMIN')")`
 - Permission-based checks: `@PreAuthorize("hasAuthority('user:delete')")`
@@ -163,6 +193,7 @@ Key configuration settings:
 - BCrypt password encoding
 - CSRF disabled (stateless JWT architecture)
 - Custom error responses: 401 for authentication failures, 403 for authorization failures
+- OAuth2 support for Google login (requires environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`)
 
 ## Development
 
