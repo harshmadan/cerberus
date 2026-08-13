@@ -28,16 +28,8 @@ public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
     private final UserDetailsService userDetailsService;
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        // BCrypt: a deliberately slow hashing algorithm (unlike MD5/SHA which
-        // are fast -- fast is bad for passwords, it's what makes brute-force
-        // cracking feasible). BCrypt also auto-generates and stores a unique
-        // salt per password, so two users with the same password get
-        // completely different hashes in the database.
-        return new BCryptPasswordEncoder();
-    }
+    private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
+    private final PasswordConfig passwordConfig;
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -46,7 +38,7 @@ public class SecurityConfig {
         // to fetch users from, and which encoder to verify passwords with.
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(passwordEncoder());
+        provider.setPasswordEncoder(this.passwordConfig.passwordEncoder());
         return provider;
     }
 
@@ -69,6 +61,13 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/**").permitAll()
                         // Swagger docs stay open too, purely for local dev convenience.
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
+                        // OAuth2 endpoints: "/oauth2/authorization/google" is where
+                        // a user starts the flow (gets redirected to Google), and
+                        // "/login/oauth2/code/google" is where Google redirects
+                        // BACK to, with an authorization code, once they approve.
+                        // Neither can require prior authentication -- that's the
+                        // whole point, the user isn't logged in yet at either step.
+                        .requestMatchers("/oauth2/**", "/login/**").permitAll()
                         // Everything else requires a valid JWT.
                         .anyRequest().authenticated()
                 )
@@ -95,6 +94,13 @@ public class SecurityConfig {
                         })
                 )
                 .authenticationProvider(authenticationProvider())
+                // Standard Spring Security OAuth2 login machinery handles the
+                // entire Google handshake (redirect, code exchange, fetching
+                // the user profile) automatically -- we only plug in what
+                // happens AFTER it succeeds.
+                .oauth2Login(oauth2 -> oauth2
+                        .successHandler(oAuth2LoginSuccessHandler)
+                )
                 // Insert our filter to run BEFORE Spring's default
                 // username/password filter, so JWT auth is checked first.
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);
