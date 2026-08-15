@@ -73,8 +73,8 @@ public class AdminController {
     }
 
     @GetMapping("/auditLogs")
-    @PreAuthorize("hasRole('ADMIN')")
-    public ResponseEntity<?> auditLogs() {
-        return ResponseEntity.ok(adminService.listAuditLogs());
+    @PreAuthorize("hasAuthority('audit:read')")
+    public List<AuditLogResponse> listAuditLogs() {
+        return adminService.listAuditLogs();
     }
 }
