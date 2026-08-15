@@ -71,4 +71,10 @@ public class AdminController {
         else
             return ResponseEntity.badRequest().body(ApiResponse.error("Failed to delete role", 400));
     }
+
+    @GetMapping("/auditLogs")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<?> auditLogs() {
+        return ResponseEntity.ok(adminService.listAuditLogs());
+    }
 }

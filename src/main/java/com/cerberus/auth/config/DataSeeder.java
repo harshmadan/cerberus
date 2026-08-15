@@ -40,7 +40,7 @@ public class DataSeeder implements CommandLineRunner {
         // "resource:action" naming -- this convention is what makes
         // @PreAuthorize("hasAuthority('user:delete')") read like plain
         // English instead of a magic string.
-        Set<Permission> adminPermissions = Stream.of("user:read", "user:write", "user:delete", "role:manage")
+        Set<Permission> adminPermissions = Stream.of("user:read", "user:write", "user:delete", "role:manage", "audit:read")
                 .map(name -> permissionRepository.findByName(name)
                         .orElseGet(() -> permissionRepository.save(Permission.builder().name(name).build())))
                 .collect(Collectors.toSet());

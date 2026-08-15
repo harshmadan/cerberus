@@ -14,6 +14,7 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 - **Admin Management API**: Dedicated endpoints for user, role, and permission management
 - **Refresh Token System**: Redis-based token storage with reuse detection
 - **Audit Logging**: Track authentication events and security-relevant actions
+- **Rate Limiting**: Redis-based rate limiting for sensitive endpoints (5 requests per minute per IP)
 - **Password Security**: BCrypt hashing with automatic salt generation
 - **Method-Level Security**: `@PreAuthorize` annotations for both role-based (`hasRole`) and permission-based (`hasAuthority`) checks
 - **API Documentation**: Interactive Swagger/OpenAPI UI at `/swagger-ui.html`
@@ -73,11 +74,13 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 - **POST** `/api/auth/register` - Register a new user
   - Body: `{ "email": "string", "password": "string" }`
   - Response: 201 Created (sends verification email)
+  - Rate Limited: 5 requests per minute per IP
 
 - **POST** `/api/auth/login` - Login with credentials
   - Body: `{ "email": "string", "password": "string" }`
   - Response: `{ "accessToken": "string", "refreshToken": "string" }`
   - Note: User must have verified their email before logging in
+  - Rate Limited: 5 requests per minute per IP
 
 - **POST** `/api/auth/refresh` - Refresh access token
   - Body: `{ "refreshToken": "string" }`
@@ -94,6 +97,7 @@ A comprehensive authentication and authorization server built with Spring Boot 3
 - **POST** `/api/auth/forgot-password` - Request password reset
   - Body: `{ "email": "string" }`
   - Response: 200 OK (always succeeds to prevent email enumeration)
+  - Rate Limited: 5 requests per minute per IP
 
 - **POST** `/api/auth/reset-password` - Reset password with token
   - Body: `{ "token": "string", "newPassword": "string" }`
@@ -139,6 +143,10 @@ Protected endpoints requiring admin role and specific permissions.
   - Headers: `Authorization: Bearer <accessToken>`
   - Body: `{ "roleName": "ROLE_ADMIN" }`
   - Response: `{ "status": 200, "message": "Role deleted successfully", "timestamp": "datetime" }`
+
+- **GET** `/api/admin/auditLogs` - Retrieve audit log entries (requires `ROLE_ADMIN`)
+  - Headers: `Authorization: Bearer <accessToken>`
+  - Response: Array of audit log entries with timestamp, action, user, and details
 
 ## Database Schema
 
@@ -194,6 +202,11 @@ Key configuration settings:
 - CSRF disabled (stateless JWT architecture)
 - Custom error responses: 401 for authentication failures, 403 for authorization failures
 - OAuth2 support for Google login (requires environment variables: `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`)
+- Rate limiting: Applied to `/api/auth/register`, `/api/auth/login`, and `/api/auth/forgot-password` endpoints
+  - 5 requests per minute per IP address
+  - Implemented using Redis for distributed counting
+  - Returns HTTP 429 (Too Many Requests) when limit exceeded
+  - Supports X-Forwarded-For header for proxy deployments
 
 ## Development
 
