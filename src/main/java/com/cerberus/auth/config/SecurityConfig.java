@@ -1,6 +1,7 @@
 package com.cerberus.auth.config;
 
 import com.cerberus.auth.security.JwtAuthenticationFilter;
+import com.cerberus.auth.security.RateLimitingFilter;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,10 +13,14 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.CorsConfigurationSource;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+
+import java.util.List;
 
 @Configuration
 @EnableWebSecurity
@@ -27,9 +32,10 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthFilter;
+    private final RateLimitingFilter rateLimitingFilter;
     private final UserDetailsService userDetailsService;
     private final OAuth2LoginSuccessHandler oAuth2LoginSuccessHandler;
-    private final PasswordConfig passwordConfig;
+    private final PasswordEncoder passwordEncoder;   // now sourced from PasswordConfig
 
     @Bean
     public DaoAuthenticationProvider authenticationProvider() {
@@ -38,7 +44,7 @@ public class SecurityConfig {
         // to fetch users from, and which encoder to verify passwords with.
         DaoAuthenticationProvider provider = new DaoAuthenticationProvider();
         provider.setUserDetailsService(userDetailsService);
-        provider.setPasswordEncoder(this.passwordConfig.passwordEncoder());
+        provider.setPasswordEncoder(passwordEncoder);
         return provider;
     }
 
@@ -51,10 +57,36 @@ public class SecurityConfig {
     }
 
     @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
+        // This is a server-side ALLOWLIST telling BROWSERS which origins'
+        // JavaScript is permitted to read responses from this API. It has
+        // no effect on curl, Postman, or server-to-server calls -- CORS is
+        // purely a browser-enforced mechanism, not a server-side security
+        // boundary by itself. localhost:3000 is a placeholder for wherever
+        // a future frontend would run in dev; swap for a real domain later.
+        CorsConfiguration config = new CorsConfiguration();
+        config.setAllowedOrigins(List.of("http://localhost:3000"));
+        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
+        config.setAllowCredentials(true);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration("/**", config);
+        return source;
+    }
+
+    @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
+                .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())  // safe here -- see explanation above;
                 // this is stateless, cookie-free auth
+                .headers(headers -> headers
+                        // Prevents this API's responses from being framed
+                        // inside an <iframe> on another site -- a defense
+                        // against clickjacking-style attacks.
+                        .frameOptions(frame -> frame.deny())
+                )
                 .authorizeHttpRequests(auth -> auth
                         // Anyone can hit register/login -- that's the whole point,
                         // you're not authenticated *yet* when calling these.
@@ -101,6 +133,13 @@ public class SecurityConfig {
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2LoginSuccessHandler)
                 )
+                // Rate limiting runs FIRST, before JWT parsing -- if a
+                // request is going to get rejected with 429 anyway, there's
+                // no point spending effort validating a token first. Both
+                // filters are added before UsernamePasswordAuthenticationFilter,
+                // and the order they're added here determines their relative
+                // execution order (rate limiting first, then JWT).
+                .addFilterBefore(rateLimitingFilter, UsernamePasswordAuthenticationFilter.class)
                 // Insert our filter to run BEFORE Spring's default
                 // username/password filter, so JWT auth is checked first.
                 .addFilterBefore(jwtAuthFilter, UsernamePasswordAuthenticationFilter.class);

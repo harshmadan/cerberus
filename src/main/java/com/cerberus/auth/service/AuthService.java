@@ -1,5 +1,6 @@
 package com.cerberus.auth.service;
 
+import com.cerberus.auth.audit.Audited;
 import com.cerberus.auth.dto.AuthResponse;
 import com.cerberus.auth.dto.LoginRequest;
 import com.cerberus.auth.dto.RegisterRequest;
@@ -10,6 +11,8 @@ import com.cerberus.auth.repository.UserRepository;
 import com.cerberus.auth.security.JwtService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.LockedException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -31,7 +34,9 @@ public class AuthService {
     private final com.cerberus.auth.security.EmailVerificationService emailVerificationService;
     private final com.cerberus.auth.security.PasswordResetService passwordResetService;
     private final MailService mailService;
+    private final com.cerberus.auth.security.LoginAttemptService loginAttemptService;
 
+    @Audited("REGISTER")
     public void register(RegisterRequest request) {
         if (userRepository.existsByEmail(request.getEmail())) {
             // 409 Conflict semantics -- handled by a global exception
@@ -61,6 +66,7 @@ public class AuthService {
         mailService.sendVerificationEmail(user.getEmail(), token);
     }
 
+    @Audited("EMAIL_VERIFICATION")
     public void verifyEmail(String token) {
         String email = emailVerificationService.consumeToken(token);
         User user = userRepository.findByEmail(email)
@@ -69,6 +75,7 @@ public class AuthService {
         userRepository.save(user);
     }
 
+    @Audited("FORGOT_PASSWORD")
     public void forgotPassword(String email) {
         // Deliberately succeeds (from the caller's point of view) whether
         // or not this email actually has an account. Responding
@@ -81,6 +88,7 @@ public class AuthService {
         });
     }
 
+    @Audited("PASSWORD_RESET")
     public void resetPassword(String token, String newPassword) {
         String email = passwordResetService.consumeToken(token);
         User user = userRepository.findByEmail(email)
@@ -96,10 +104,28 @@ public class AuthService {
         // active session, not just require a new password going forward.
     }
 
+    @Audited("LOGIN")
     public AuthResponse login(LoginRequest request) {
-        authenticationManager.authenticate(
-                new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
-        );
+        if (loginAttemptService.isLocked(request.getEmail())) {
+            throw new LockedException("Too many failed attempts -- account temporarily locked. Try again in 15 minutes.");
+        }
+
+        try {
+            authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(request.getEmail(), request.getPassword())
+            );
+        } catch (BadCredentialsException ex) {
+            // Only WRONG PASSWORD counts toward lockout -- not every login
+            // failure. A DisabledException (unverified email), for example,
+            // shouldn't count against someone who simply hasn't checked
+            // their inbox yet.
+            loginAttemptService.recordFailure(request.getEmail());
+            throw ex;
+        }
+
+        // Successful login clears the counter -- lockout is about a BURST
+        // of recent failures, not a lifetime tally.
+        loginAttemptService.resetAttempts(request.getEmail());
 
         UserDetails userDetails = userDetailsService.loadUserByUsername(request.getEmail());
         String accessToken = jwtService.generateAccessToken(userDetails);
@@ -112,6 +138,7 @@ public class AuthService {
                 .build();
     }
 
+    @Audited("REFRESH_TOKEN")
     public AuthResponse refresh(String refreshToken) {
         // rotate() does all the real work: validates, detects reuse, and
         // issues the new token. If it throws, our GlobalExceptionHandler
@@ -127,6 +154,7 @@ public class AuthService {
                 .build();
     }
 
+    @Audited("LOGOUT")
     public void logout(String refreshToken) {
         refreshTokenService.revoke(refreshToken);
     }
