@@ -41,5 +41,38 @@ services:
       - "1025:1025"   # SMTP port -- your app sends mail here
       - "8025:8025"   # web UI -- you view the mail here
 
+  # ---- The app itself ----
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: cerberus-app
+    ports:
+      - "8080:8080"
+    environment:
+      # Spring Boot's relaxed binding maps SPRING_DATASOURCE_URL -> the
+      # spring.datasource.url property automatically, and env vars always
+      # win over application.yml. So application.yml keeps its "localhost"
+      # defaults (correct for running the jar directly on your machine),
+      # while these overrides make the SAME config file correct here too --
+      # no profile files, no duplicated config.
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/cerberus
+      SPRING_DATASOURCE_USERNAME: cerberus
+      SPRING_DATASOURCE_PASSWORD: cerberus_dev_password
+      SPRING_DATA_REDIS_HOST: redis
+      SPRING_MAIL_HOST: mailhog
+      # Pass real Google credentials through from your shell environment,
+      # if you've set them there -- falls back to the placeholder otherwise.
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:-placeholder-client-id}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:-placeholder-client-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   pg_data:
