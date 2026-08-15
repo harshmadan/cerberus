@@ -144,7 +144,7 @@ Protected endpoints requiring admin role and specific permissions.
   - Body: `{ "roleName": "ROLE_ADMIN" }`
   - Response: `{ "status": 200, "message": "Role deleted successfully", "timestamp": "datetime" }`
 
-- **GET** `/api/admin/auditLogs` - Retrieve audit log entries (requires `ROLE_ADMIN`)
+- **GET** `/api/admin/auditLogs` - Retrieve audit log entries (requires `role:read` permission)
   - Headers: `Authorization: Bearer <accessToken>`
   - Response: Array of audit log entries with timestamp, action, user, and details
 
